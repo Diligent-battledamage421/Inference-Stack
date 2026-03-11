@@ -1,0 +1,277 @@
+syntax = "proto3";
+
+package inference.worker.v1;
+
+service InferenceWorker {
+  // Run inference. Returns a stream of tokens.
+  rpc Infer (InferRequest) returns (stream InferResponse);
+
+  // Load a model onto this worker's GPU.
+  rpc LoadModel (LoadModelRequest) returns (LoadModelResponse);
+
+  // Unload a model from this worker's GPU.
+  rpc UnloadModel (UnloadModelRequest) returns (UnloadModelResponse);
+
+  // Get current worker state.
+  rpc GetWorkerState (GetWorkerStateRequest) returns (WorkerState);
+
+  // Stream of state updates.
+  rpc WatchWorkerState (WatchWorkerStateRequest) returns (stream WorkerState);
+
+  // Get KV cache entries on this worker.
+  rpc GetCacheEntries (GetCacheEntriesRequest) returns (CacheEntriesResponse);
+
+  // Explicitly evict a KV cache entry.
+  rpc EvictCache (EvictCacheRequest) returns (EvictCacheResponse);
+
+  // Health check.
+  rpc Health (HealthRequest) returns (HealthResponse);
+}
+
+// ============================================================
+// Inference
+// ============================================================
+
+message InferRequest {
+  string request_id = 1;
+  string model_id = 2;
+  repeated int32 token_ids = 3;
+  string prompt = 4;
+  GenerationParams params = 5;
+  CacheHint cache_hint = 6;
+  bytes image_data = 7;            // Raw image bytes (JPEG/PNG) for vision-language models
+  string image_mime_type = 8;      // "image/jpeg", "image/png", etc.
+}
+
+message GenerationParams {
+  int32 max_tokens = 1;
+  float temperature = 2;
+  float top_p = 3;
+  int32 top_k = 4;
+  repeated string stop_sequences = 5;
+  bool echo = 6;
+  string json_schema = 7;
+}
+
+message CacheHint {
+  string session_id = 1;
+  string prefix_hash = 2;
+  int32 prefix_length = 3;
+}
+
+message InferResponse {
+  string request_id = 1;
+  oneof payload {
+    TokenChunk chunk = 2;
+    InferComplete complete = 3;
+    InferError error = 4;
+    MediaOutput media = 5;         // Generated media (image, audio, video)
+  }
+}
+
+message MediaOutput {
+  bytes data = 1;                  // Raw media bytes (PNG, WAV, MP4)
+  string mime_type = 2;            // "image/png", "audio/wav", "video/mp4"
+  bool is_final = 3;              // True if this is the final (or only) chunk of media
+}
+
+message TokenChunk {
+  repeated int32 token_ids = 1;
+  string text = 2;
+}
+
+message InferComplete {
+  FinishReason finish_reason = 1;
+  UsageStats usage = 2;
+  CacheInfo cache_info = 3;
+}
+
+enum FinishReason {
+  FINISH_REASON_UNSPECIFIED = 0;
+  STOP = 1;
+  MAX_TOKENS = 2;
+  CONTENT_FILTER = 3;
+}
+
+message UsageStats {
+  int32 prompt_tokens = 1;
+  int32 completion_tokens = 2;
+  int32 cached_tokens = 3;
+  float prefill_time_ms = 4;
+  float decode_time_ms = 5;
+  float total_time_ms = 6;
+}
+
+message CacheInfo {
+  string cache_id = 1;
+  int32 cached_tokens = 2;
+  int32 new_tokens = 3;
+  int64 cache_size_bytes = 4;
+}
+
+message InferError {
+  ErrorCode code = 1;
+  string message = 2;
+  bool retriable = 3;
+}
+
+enum ErrorCode {
+  ERROR_CODE_UNSPECIFIED = 0;
+  OOM = 1;
+  MODEL_NOT_LOADED = 2;
+  TIMEOUT = 3;
+  CANCELLED = 4;
+  INTERNAL = 5;
+  INVALID_INPUT = 6;
+}
+
+// ============================================================
+// Model Management
+// ============================================================
+
+message LoadModelRequest {
+  string model_id = 1;
+  string model_path = 2;
+  string quantization = 3;
+  int64 estimated_vram_bytes = 4;
+  int32 max_batch_size = 5;
+  string model_type = 6;           // "text_gen", "vision_language", "tts", "image_gen", "video_gen"
+}
+
+message LoadModelResponse {
+  bool success = 1;
+  string error_message = 2;
+  int64 vram_used_bytes = 3;
+  int64 vram_available_bytes = 4;
+  ModelCapabilities capabilities = 5;
+}
+
+message ModelCapabilities {
+  int32 max_context_length = 1;
+  int32 vocab_size = 2;
+  bool supports_logprobs = 3;
+  bool supports_json_mode = 4;
+  bool supports_grammar = 5;
+  string model_type = 6;           // Which pipeline type this model uses
+  bool supports_image_input = 7;   // Accepts image_data in InferRequest (vision-language)
+  bool supports_image_output = 8;  // Returns MediaOutput with image/png (image gen)
+  bool supports_audio_output = 9;  // Returns MediaOutput with audio/wav (TTS)
+  bool supports_video_output = 10; // Returns MediaOutput with video/mp4 (video gen)
+}
+
+message UnloadModelRequest {
+  string model_id = 1;
+  bool force = 2;
+}
+
+message UnloadModelResponse {
+  bool success = 1;
+  string error_message = 2;
+  int32 caches_destroyed = 3;
+  int64 vram_freed_bytes = 4;
+}
+
+// ============================================================
+// State Observation
+// ============================================================
+
+message GetWorkerStateRequest {}
+
+message WatchWorkerStateRequest {
+  int32 min_interval_ms = 1;
+}
+
+message WorkerState {
+  string worker_id = 1;
+  int64 timestamp_ms = 2;
+  GpuInfo gpu = 3;
+  repeated LoadedModel models = 4;
+  int32 active_inferences = 5;
+  int32 queued_inferences = 6;
+  CacheSummary cache_summary = 7;
+}
+
+message GpuInfo {
+  string gpu_id = 1;
+  string gpu_model = 2;
+  int64 vram_total_bytes = 3;
+  int64 vram_used_bytes = 4;
+  int64 vram_available_bytes = 5;
+  float gpu_utilization = 6;
+  float gpu_temperature_c = 7;
+  bool healthy = 8;
+}
+
+message LoadedModel {
+  string model_id = 1;
+  string quantization = 2;
+  int64 vram_used_bytes = 3;
+  bool ready = 4;
+}
+
+message CacheSummary {
+  int32 total_entries = 1;
+  int64 total_vram_bytes = 2;
+  int32 session_caches = 3;
+  int32 prefix_caches = 4;
+  int32 document_caches = 5;
+}
+
+message GetCacheEntriesRequest {
+  string model_id = 1;
+  string session_id = 2;
+}
+
+message CacheEntriesResponse {
+  repeated CacheEntry entries = 1;
+}
+
+message CacheEntry {
+  string cache_id = 1;
+  string model_id = 2;
+  string session_id = 3;
+  string prefix_hash = 4;
+  CacheType cache_type = 5;
+  int32 token_count = 6;
+  int64 vram_bytes = 7;
+  int64 created_at_ms = 8;
+  int64 last_accessed_at_ms = 9;
+  int32 access_count = 10;
+}
+
+enum CacheType {
+  CACHE_TYPE_UNSPECIFIED = 0;
+  SESSION = 1;
+  PREFIX = 2;
+  DOCUMENT = 3;
+}
+
+message EvictCacheRequest {
+  string cache_id = 1;
+}
+
+message EvictCacheResponse {
+  bool success = 1;
+  int64 vram_freed_bytes = 2;
+}
+
+// ============================================================
+// Health
+// ============================================================
+
+message HealthRequest {}
+
+message HealthResponse {
+  HealthStatus status = 1;
+  string message = 2;
+  int64 uptime_ms = 3;
+  int64 total_inferences = 4;
+}
+
+enum HealthStatus {
+  HEALTH_STATUS_UNSPECIFIED = 0;
+  HEALTHY = 1;
+  DEGRADED = 2;
+  UNHEALTHY = 3;
+  LOADING = 4;
+}

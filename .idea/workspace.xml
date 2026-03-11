@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="SELECTIVE" />
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="7c44b328-dd59-4fa6-8392-b33a0b62e97b" name="Changes" comment="">
+      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/apps/trry/.babelrc.js" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/apps/trry/app.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/apps/trry/assets/adaptive-icon.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/apps/trry/assets/favicon.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/apps/trry/assets/icon.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/apps/trry/assets/splash.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/apps/trry/eas.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/apps/trry/eslint.config.js" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/apps/trry/index.js" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/apps/trry/jest.config.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/apps/trry/metro.config.js" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/apps/trry/package.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/apps/trry/project.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/apps/trry/src/app/App.spec.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/apps/trry/src/app/App.tsx" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/apps/trry/src/test-setup.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/apps/trry/tsconfig.app.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/apps/trry/tsconfig.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/apps/trry/tsconfig.spec.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/babel.config.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/bitbucket-pipelines.yml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/eslint.config.js" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/jest.config.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/jest.preset.js" beforeDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="ProjectColorInfo">{
+  &quot;associatedIndex&quot;: 7
+}</component>
+  <component name="ProjectId" id="31B0gkax6TdnYJDOWBOuWb5WZKH" />
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "ModuleVcsDetector.initialDetectionPerformed": "true",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
+    "RunOnceActivity.git.unshallow": "true",
+    "RunOnceActivity.typescript.service.memoryLimit.init": "true",
+    "WebServerToolWindowPanel.toolwindow.highlight.mappings": "true",
+    "WebServerToolWindowPanel.toolwindow.highlight.symlinks": "true",
+    "WebServerToolWindowPanel.toolwindow.show.date": "false",
+    "WebServerToolWindowPanel.toolwindow.show.permissions": "false",
+    "WebServerToolWindowPanel.toolwindow.show.size": "false",
+    "git-widget-placeholder": "main",
+    "node.js.detected.package.eslint": "true",
+    "node.js.detected.package.tslint": "true",
+    "node.js.selected.package.eslint": "(autodetect)",
+    "node.js.selected.package.tslint": "(autodetect)",
+    "nodejs_package_manager_path": "npm",
+    "settings.editor.selected.configurable": "preferences.pluginManager",
+    "ts.external.directory.path": "/Users/kumardivyarajat/WebstormProjects/test/inference-api/node_modules/typescript/lib"
+  },
+  "keyToStringList": {
+    "dev.nx.console.project_details_files": [
+      "/Users/kumardivyarajat/WebstormProjects/test/apps/trry/project.json",
+      "/Users/kumardivyarajat/WebstormProjects/test/apps/trry/package.json",
+      "/Users/kumardivyarajat/WebstormProjects/test/apps/trry/app.json",
+      "/Users/kumardivyarajat/WebstormProjects/test/apps/trry/eslint.config.js",
+      "/Users/kumardivyarajat/WebstormProjects/test/apps/trry/jest.config.ts"
+    ]
+  }
+}]]></component>
+  <component name="SharedIndexes">
+    <attachedChunks>
+      <set>
+        <option value="bundled-js-predefined-d6986cc7102b-9b0f141eb926-JavaScript-WS-253.31033.133" />
+      </set>
+    </attachedChunks>
+  </component>
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="7c44b328-dd59-4fa6-8392-b33a0b62e97b" name="Changes" comment="" />
+      <created>1754982272243</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1754982272243</updated>
+      <workItem from="1754982273597" duration="2223000" />
+      <workItem from="1773208507861" duration="41084000" />
+    </task>
+    <servers />
+  </component>
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="3" />
+  </component>
+  <component name="Vcs.Log.Tabs.Properties">
+    <option name="TAB_STATES">
+      <map>
+        <entry key="MAIN">
+          <value>
+            <State />
+          </value>
+        </entry>
+      </map>
+    </option>
+  </component>
+</project>

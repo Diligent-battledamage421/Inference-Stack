@@ -1,0 +1,300 @@
+"""
+GPU Worker gRPC Server
+
+Entry point for the GPU worker process. Starts a gRPC server that
+implements the InferenceWorker service from inference_worker.proto.
+
+Usage:
+    python server.py --port 50051 --gpu-id 0
+"""
+
+import argparse
+import logging
+import signal
+import sys
+import threading
+import time
+from concurrent import futures
+
+import grpc
+
+# Generated proto stubs (run generate_stubs.sh first)
+sys.path.insert(0, ".")
+from generated import inference_worker_pb2 as pb2
+from generated import inference_worker_pb2_grpc as pb2_grpc
+
+from worker import GpuWorker
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+)
+logger = logging.getLogger(__name__)
+
+# 100MB max message size for large media (video gen)
+MAX_MESSAGE_LENGTH = 100 * 1024 * 1024
+
+
+class InferenceWorkerServicer(pb2_grpc.InferenceWorkerServicer):
+    """gRPC service implementation — delegates everything to GpuWorker."""
+
+    def __init__(self, worker: GpuWorker):
+        self.worker = worker
+
+    def Health(self, request, context):
+        result = self.worker.health()
+        return pb2.HealthResponse(
+            status=_health_status_to_enum(result["status"]),
+            message=result["message"],
+            uptime_ms=result["uptime_ms"],
+            total_inferences=result["total_inferences"],
+        )
+
+    def GetWorkerState(self, request, context):
+        state = self.worker.get_worker_state()
+        return _build_worker_state(state)
+
+    def WatchWorkerState(self, request, context):
+        while context.is_active():
+            state = self.worker.get_worker_state()
+            yield _build_worker_state(state)
+            time.sleep(max(request.min_interval_ms / 1000.0, 0.1))
+
+    def LoadModel(self, request, context):
+        result = self.worker.load_model(
+            model_id=request.model_id,
+            model_path=request.model_path,
+            quantization=request.quantization or "fp16",
+            estimated_vram_bytes=request.estimated_vram_bytes,
+            model_type=request.model_type,
+        )
+
+        capabilities = None
+        if result.get("capabilities"):
+            caps = result["capabilities"]
+            capabilities = pb2.ModelCapabilities(
+                max_context_length=caps.get("max_context_length", 0),
+                vocab_size=caps.get("vocab_size", 0),
+                supports_logprobs=caps.get("supports_logprobs", False),
+                supports_json_mode=caps.get("supports_json_mode", False),
+                supports_grammar=caps.get("supports_grammar", False),
+                model_type=caps.get("model_type", ""),
+                supports_image_input=caps.get("supports_image_input", False),
+                supports_image_output=caps.get("supports_image_output", False),
+                supports_audio_output=caps.get("supports_audio_output", False),
+                supports_video_output=caps.get("supports_video_output", False),
+            )
+
+        return pb2.LoadModelResponse(
+            success=result["success"],
+            error_message=result.get("error_message", ""),
+            vram_used_bytes=result.get("vram_used_bytes", 0),
+            vram_available_bytes=result.get("vram_available_bytes", 0),
+            capabilities=capabilities,
+        )
+
+    def UnloadModel(self, request, context):
+        result = self.worker.unload_model(
+            model_id=request.model_id,
+            force=request.force,
+        )
+        return pb2.UnloadModelResponse(
+            success=result["success"],
+            error_message=result.get("error_message", ""),
+            caches_destroyed=result.get("caches_destroyed", 0),
+            vram_freed_bytes=result.get("vram_freed_bytes", 0),
+        )
+
+    def Infer(self, request, context):
+        # Check if model is loaded — return error via stream if not
+        if request.model_id not in self.worker.loaded_models:
+            yield pb2.InferResponse(
+                request_id=request.request_id,
+                error=pb2.InferError(
+                    code=pb2.MODEL_NOT_LOADED,
+                    message=f"Model {request.model_id} is not loaded on this worker",
+                    retriable=False,
+                ),
+            )
+            return
+
+        # Build request dict for worker
+        infer_request = {
+            "model_id": request.model_id,
+            "prompt": request.prompt,
+            "token_ids": list(request.token_ids) if request.token_ids else [],
+            "params": {
+                "max_tokens": request.params.max_tokens if request.params else 50,
+                "temperature": request.params.temperature if request.params else 1.0,
+                "top_p": request.params.top_p if request.params else 1.0,
+            } if request.params else {},
+        }
+
+        # Pass image data for vision-language models
+        if request.image_data:
+            infer_request["image_data"] = request.image_data
+            infer_request["image_mime_type"] = request.image_mime_type
+
+        for result in self.worker.infer(infer_request):
+            # Check if client disconnected
+            if not context.is_active():
+                logger.info(f"Client disconnected for request {request.request_id}")
+                return
+
+            if result.is_complete:
+                if result.finish_reason == "ERROR":
+                    yield pb2.InferResponse(
+                        request_id=request.request_id,
+                        error=pb2.InferError(
+                            code=pb2.INTERNAL,
+                            message="Inference failed",
+                            retriable=True,
+                        ),
+                    )
+                else:
+                    yield pb2.InferResponse(
+                        request_id=request.request_id,
+                        complete=pb2.InferComplete(
+                            finish_reason=_finish_reason_to_enum(result.finish_reason),
+                            usage=pb2.UsageStats(
+                                prompt_tokens=result.prompt_tokens,
+                                completion_tokens=result.completion_tokens,
+                                cached_tokens=0,
+                                prefill_time_ms=result.prefill_time_ms,
+                                decode_time_ms=result.decode_time_ms,
+                                total_time_ms=result.total_time_ms,
+                            ),
+                        ),
+                    )
+            elif result.media_data is not None:
+                # Media output (image, audio, video)
+                yield pb2.InferResponse(
+                    request_id=request.request_id,
+                    media=pb2.MediaOutput(
+                        data=result.media_data,
+                        mime_type=result.media_mime_type or "",
+                        is_final=result.is_media_final,
+                    ),
+                )
+            else:
+                # Text chunk
+                yield pb2.InferResponse(
+                    request_id=request.request_id,
+                    chunk=pb2.TokenChunk(
+                        token_ids=result.chunk_token_ids or [],
+                        text=result.chunk_text or "",
+                    ),
+                )
+
+    def GetCacheEntries(self, request, context):
+        return pb2.CacheEntriesResponse(entries=[])
+
+    def EvictCache(self, request, context):
+        return pb2.EvictCacheResponse(success=False, vram_freed_bytes=0)
+
+
+# ================================================================
+# Helpers
+# ================================================================
+
+def _health_status_to_enum(status_str: str) -> int:
+    mapping = {
+        "HEALTHY": pb2.HEALTHY,
+        "DEGRADED": pb2.DEGRADED,
+        "UNHEALTHY": pb2.UNHEALTHY,
+        "LOADING": pb2.LOADING,
+    }
+    return mapping.get(status_str, pb2.HEALTH_STATUS_UNSPECIFIED)
+
+
+def _finish_reason_to_enum(reason_str: str) -> int:
+    mapping = {
+        "STOP": pb2.STOP,
+        "MAX_TOKENS": pb2.MAX_TOKENS,
+        "CONTENT_FILTER": pb2.CONTENT_FILTER,
+    }
+    return mapping.get(reason_str, pb2.FINISH_REASON_UNSPECIFIED)
+
+
+def _build_worker_state(state: dict) -> pb2.WorkerState:
+    gpu = state.get("gpu", {})
+    models = [
+        pb2.LoadedModel(
+            model_id=m["model_id"],
+            quantization=m.get("quantization", ""),
+            vram_used_bytes=m.get("vram_used_bytes", 0),
+            ready=m.get("ready", True),
+        )
+        for m in state.get("models", [])
+    ]
+    cache = state.get("cache_summary", {})
+
+    return pb2.WorkerState(
+        worker_id=state.get("worker_id", ""),
+        timestamp_ms=state.get("timestamp_ms", 0),
+        gpu=pb2.GpuInfo(
+            gpu_id=gpu.get("gpu_id", ""),
+            gpu_model=gpu.get("gpu_model", ""),
+            vram_total_bytes=gpu.get("vram_total_bytes", 0),
+            vram_used_bytes=gpu.get("vram_used_bytes", 0),
+            vram_available_bytes=gpu.get("vram_available_bytes", 0),
+            gpu_utilization=gpu.get("gpu_utilization", 0.0),
+            gpu_temperature_c=gpu.get("gpu_temperature_c", 0.0),
+            healthy=gpu.get("healthy", True),
+        ),
+        models=models,
+        active_inferences=state.get("active_inferences", 0),
+        queued_inferences=state.get("queued_inferences", 0),
+        cache_summary=pb2.CacheSummary(
+            total_entries=cache.get("total_entries", 0),
+            total_vram_bytes=cache.get("total_vram_bytes", 0),
+            session_caches=cache.get("session_caches", 0),
+            prefix_caches=cache.get("prefix_caches", 0),
+            document_caches=cache.get("document_caches", 0),
+        ),
+    )
+
+
+# ================================================================
+# Server
+# ================================================================
+
+def serve(port: int, gpu_id: int, worker_id: str):
+    worker = GpuWorker(gpu_id=gpu_id, worker_id=worker_id)
+    server = grpc.server(
+        futures.ThreadPoolExecutor(max_workers=10),
+        options=[
+            ('grpc.max_send_message_length', MAX_MESSAGE_LENGTH),
+            ('grpc.max_receive_message_length', MAX_MESSAGE_LENGTH),
+        ],
+    )
+    pb2_grpc.add_InferenceWorkerServicer_to_server(
+        InferenceWorkerServicer(worker), server
+    )
+    server.add_insecure_port(f"0.0.0.0:{port}")
+    server.start()
+    logger.info(f"GPU Worker {worker_id} listening on port {port} (GPU {gpu_id})")
+
+    # Graceful shutdown
+    stop_event = threading.Event()
+
+    def shutdown(signum, frame):
+        logger.info("Shutting down...")
+        stop_event.set()
+        server.stop(grace=5)
+
+    signal.signal(signal.SIGINT, shutdown)
+    signal.signal(signal.SIGTERM, shutdown)
+
+    stop_event.wait()
+    logger.info("Server stopped.")
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="GPU Worker gRPC Server")
+    parser.add_argument("--port", type=int, default=50051, help="Port to listen on")
+    parser.add_argument("--gpu-id", type=int, default=0, help="CUDA device index")
+    parser.add_argument("--worker-id", type=str, default="worker-0", help="Worker identifier")
+    args = parser.parse_args()
+
+    serve(port=args.port, gpu_id=args.gpu_id, worker_id=args.worker_id)

@@ -1,0 +1,16 @@
+grpcio>=1.60.0
+grpcio-tools>=1.60.0
+torch>=2.5.0
+transformers>=5.0.0
+pynvml>=11.5.0
+# Multi-modal pipeline dependencies
+diffusers>=0.37.0
+Pillow
+soundfile
+kokoro
+qwen-vl-utils
+accelerate
+numpy
+opencv-python-headless
+imageio
+imageio-ffmpeg
